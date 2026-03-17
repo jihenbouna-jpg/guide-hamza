@@ -1231,50 +1231,129 @@ function onLoginSuccess() {
 
 // ─── DB OPERATIONS (fetch-based) ─────────────────────────────
 async function dbSaveDay(key, data) {
+  // Always save locally first
   localStorage.setItem('day_' + key, JSON.stringify(data));
   if (!accessToken || !currentUser) return;
-  const row = { user_id: currentUser.id, date_key: key, ...data, updated_at: new Date().toISOString() };
-  await supaFetch('/rest/v1/hamza_daily', 'POST', row, true).catch(()=>{});
-  // Try upsert via PATCH if insert fails
-  await fetch(SUPA_URL + '/rest/v1/hamza_daily?user_id=eq.' + currentUser.id + '&date_key=eq.' + key, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + accessToken, 'Prefer': 'resolution=merge-duplicates' },
-    body: JSON.stringify(row)
-  }).catch(()=>{});
+  // Clean data for Supabase (no undefined values)
+  const row = {
+    user_id: currentUser.id,
+    date_key: key,
+    score: data.score || 0,
+    school: data.school || 0,
+    mood: data.mood || 0,
+    subjects: data.subjects || {},
+    done: data.done || [],
+    hero: data.hero || '',
+    force_jour: data.force_jour || '',
+    school_note: data.school_note || '',
+    updated_at: new Date().toISOString()
+  };
+  try {
+    await fetch(SUPA_URL + '/rest/v1/hamza_daily', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + accessToken,
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify(row)
+    });
+  } catch(e) { console.log('Save day error:', e); }
 }
 
 async function dbSaveWeek(key, data) {
   localStorage.setItem('week_' + key, JSON.stringify(data));
   if (!accessToken || !currentUser) return;
-  const row = { user_id: currentUser.id, week_key: key, ...data, updated_at: new Date().toISOString() };
-  await fetch(SUPA_URL + '/rest/v1/hamza_weekly', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + accessToken, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(row)
-  }).catch(()=>{});
+  const row = {
+    user_id: currentUser.id,
+    week_key: key,
+    subjects: data.subjects || {},
+    notes: data.notes || '',
+    updated_at: new Date().toISOString()
+  };
+  try {
+    await fetch(SUPA_URL + '/rest/v1/hamza_weekly', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + accessToken,
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify(row)
+    });
+  } catch(e) { console.log('Save week error:', e); }
 }
 
 async function dbLoadAllDays() {
-  if (!accessToken || !currentUser) return {};
+  // First load from localStorage as immediate fallback
+  const local = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('day_')) {
+      try { local[k.replace('day_', '')] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+    }
+  }
+  if (!accessToken || !currentUser) return local;
   try {
-    const res = await fetch(SUPA_URL + '/rest/v1/hamza_daily?user_id=eq.' + currentUser.id + '&select=*', {
+    const res = await fetch(SUPA_URL + '/rest/v1/hamza_daily?user_id=eq.' + currentUser.id + '&select=*&order=date_key.desc', {
       headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + accessToken }
     });
     const rows = await res.json();
-    if (!Array.isArray(rows)) return {};
-    const result = {};
+    if (!Array.isArray(rows)) return local;
+    const result = { ...local };
     rows.forEach(row => {
-      result[row.date_key] = { score: row.score, hero: row.hero, school: row.school, mood: row.mood, subjects: row.subjects || {}, done: row.done || [], force_jour: row.force_jour, school_note: row.school_note };
+      // Supabase data takes priority over local (more recent/synced)
+      result[row.date_key] = {
+        score: row.score,
+        hero: row.hero,
+        school: row.school,
+        mood: row.mood,
+        subjects: row.subjects || {},
+        done: row.done || [],
+        force_jour: row.force_jour,
+        school_note: row.school_note
+      };
+      // Also update localStorage with Supabase data
+      localStorage.setItem('day_' + row.date_key, JSON.stringify(result[row.date_key]));
     });
     return result;
-  } catch(e) { return {}; }
+  } catch(e) {
+    console.log('Load error, using local:', e);
+    return local;
+  }
 }
 
 async function loadAllData() {
   const allDays = await dbLoadAllDays();
   Object.assign(DAY_STORAGE, allDays);
+  // Refresh current view
+  renderWeek();
   pRenderWeek();
   updateStreak();
+}
+
+// Helper to reload current day data after loading all
+function renderWeek() {
+  try {
+    const key = getDateKey(currentOffset);
+    const data = DAY_STORAGE[key];
+    if (data) {
+      if (data.done) data.done.forEach((d,i) => {
+        if(d && i<9){done[i]=true;const fc=document.getElementById('fc'+i);const fb=document.getElementById('fb'+i);if(fc)fc.classList.add('done');if(fb)fb.classList.add('checked');}
+      });
+      if (data.school && data.school > 0) rateSchool(data.school);
+      if (data.mood && data.mood > 0) rateMood(data.mood);
+      if (data.subjects) loadSubjStars(data.subjects);
+      const sn = document.getElementById('schoolNote');
+      if (sn) sn.value = data.school_note || '';
+      const fn = document.getElementById('forceNote');
+      if (fn) fn.value = data.force_jour || '';
+    }
+    updateScore();
+    updateStreak();
+  } catch(e) {}
 }
 
 // ─── RESTORE SESSION ON LOAD ──────────────────────────────────
@@ -1285,7 +1364,21 @@ window.addEventListener('load', () => {
       const session = JSON.parse(saved);
       accessToken = session.access_token;
       currentUser = session.user;
-      onLoginSuccess();
+      // Show app immediately with local data
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      // Load local data instantly
+      const local = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('day_')) {
+          try { local[k.replace('day_', '')] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+        }
+      }
+      Object.assign(DAY_STORAGE, local);
+      updateStreak();
+      // Then sync with Supabase in background
+      loadAllData();
       return;
     } catch(e) {}
   }
@@ -1340,7 +1433,22 @@ const HEROES=[
   {min:100,emoji:'⭐',name:"L'Étoile Invincible",title:'NIVEAU MAX — Champion absolu',power:'"Journée parfaite. Tu es extraordinaire, Hamza !"'},
 ];
 const DAY_STORAGE={};let currentOffset=0;
-function getDateKey(o){const d=new Date();d.setDate(d.getDate()+o);return d.toISOString().slice(0,10);}
+// ─── LOCAL DATE HELPER ───────────────────────────────────────
+function localDateStr(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+function getDateKey(o){
+  const d=new Date();
+  d.setDate(d.getDate()+o);
+  // Use local date (not UTC) to avoid timezone shift
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
 function getDateLabel(o){if(o===0)return"Aujourd'hui";if(o===-1)return'Hier';if(o===1)return'Demain';const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'long'});}
 function getDateSub(o){const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'});}
 function getHero(score){let h=HEROES[0];for(const hero of HEROES){if(score>=hero.min)h=hero;}return h;}
@@ -1378,8 +1486,12 @@ function saveDay(){
 }
 function resetDay(){for(let i=0;i<9;i++){done[i]=false;flipped[i]=false;document.getElementById('fc'+i).classList.remove('done','flipped');document.getElementById('fb'+i).classList.remove('checked');}schoolScore=0;moodScore=0;document.querySelectorAll('.school-face').forEach(f=>f.classList.remove('sel'));document.getElementById('schoolComment').textContent='Choisis un visage pour noter ta journée à l\'école';document.getElementById('moodComment').textContent='Hamza choisit son visage du jour';resetSubjStars();document.getElementById('schoolNote').value='';document.getElementById('forceNote').value='';updateScore();}
 function updateStreak(){const row=document.getElementById('streakRow');row.innerHTML='';const dl=['D','L','M','M','J','V','S'];for(let i=-3;i<=3;i++){const key=getDateKey(i),data=DAY_STORAGE[key],score=data?data.score:null,he=data?data.hero:'·';const d=new Date();d.setDate(d.getDate()+i);const div=document.createElement('div');div.className='streak-day'+(i===0?' today':'')+(score>=80?' great':'');div.innerHTML='<div class="sd-label">'+dl[d.getDay()]+'</div><div class="sd-hero">'+(score!==null?he:'·')+'</div><div class="sd-score">'+(score!==null?score+'pts':'-')+'</div>';row.appendChild(div);}}
-function changeDay(delta){currentOffset+=delta;document.getElementById('dateLabel').textContent=getDateLabel(currentOffset);document.getElementById('dateSub').textContent=getDateSub(currentOffset);const key=getDateKey(currentOffset),data=DAY_STORAGE[key];resetDay();if(data){data.done.forEach((d,i)=>{if(d){done[i]=true;document.getElementById('fc'+i).classList.add('done');document.getElementById('fb'+i).classList.add('checked');}});if(data.school)rateSchool(data.school);if(data.mood)rateMood(data.mood);if(data.subjects)loadSubjStars(data.subjects);updateScore();}updateStreak();}
+function changeDay(delta){currentOffset+=delta;document.getElementById('dateLabel').textContent=getDateLabel(currentOffset);document.getElementById('dateSub').textContent=getDateSub(currentOffset);const key=getDateKey(currentOffset),data=DAY_STORAGE[key];resetDay();if(data){data.done.forEach((d,i)=>{if(d){done[i]=true;document.getElementById('fc'+i).classList.add('done');document.getElementById('fb'+i).classList.add('checked');}});if(data.school)rateSchool(data.school);if(data.mood)rateMood(data.mood);if(data.subjects)loadSubjStars(data.subjects);
+    const sn=document.getElementById('schoolNote');if(sn)sn.value=data.school_note||'';
+    const fn=document.getElementById('forceNote');if(fn)fn.value=data.force_jour||'';updateScore();}updateStreak();}
 document.getElementById('dateSub').textContent=getDateSub(0);
+// Debug: confirm date key
+console.log('Today key:', getDateKey(0), '| Local date:', new Date().toLocaleDateString('fr-CA'));
 updateStreak();updateScore();
 let tIntvl=null,tTotal=900,tRemain=900,tRunning=false;
 const TCIRC=2*Math.PI*63;
@@ -1447,7 +1559,7 @@ function pRenderWeek(){
   const data=PSTORE[key]||{};
   // Read directly from DAY_STORAGE (Suivi Héros saves there)
   for(let i=0;i<7;i++){
-    const dayKey=dates[i].toISOString().slice(0,10);
+    const _d=dates[i];const dayKey=localDateStr(_d);
     const dayData=DAY_STORAGE[dayKey];
     // Priority: manual PSTORE entry > auto from DAY_STORAGE > empty
     const scoreVal = (data.scores&&data.scores[i]!==null&&data.scores[i]!==undefined) ? data.scores[i] : (dayData&&dayData.score!==undefined&&dayData.score!==null ? dayData.score : '');
@@ -1461,7 +1573,7 @@ function pRenderWeek(){
     const el=document.getElementById('pi-'+s);
     if(!el)return;
     const weekVals=dates.map(d=>{
-      const dk=d.toISOString().slice(0,10);
+      const dk=localDateStr(d);
       const dd=DAY_STORAGE[dk];
       return dd&&dd.subjects&&dd.subjects[s]>0?dd.subjects[s]:null;
     }).filter(v=>v!==null);
