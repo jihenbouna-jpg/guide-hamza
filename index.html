@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guide Hamza — Complet v3</title>
+<title>Guide Hamza — Ton superpouvoir</title>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -327,6 +327,26 @@ body{background:#F7F4EF;font-family:'DM Sans',sans-serif;padding:1.5rem 1rem 4re
 .ws-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
 .ws-body{font-size:13px;color:var(--text);line-height:1.6;}
 .ws-goal{font-size:12px;font-weight:500;padding:3px 10px;border-radius:20px;background:#F7EAEB;color:#C4848A;display:inline-block;margin-top:5px;}
+
+/* SIDEBAR LAYOUT */
+.app-layout{display:flex;gap:0;min-height:calc(100vh - 120px);}
+.sidebar{width:200px;flex-shrink:0;padding-right:1.25rem;}
+.sidebar-group{margin-bottom:1.25rem;}
+.sidebar-group-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 .5rem;margin-bottom:.4rem;display:block;}
+.sidebar-btn{display:flex;align-items:center;gap:7px;width:100%;padding:7px .75rem;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:400;background:transparent;color:var(--text);text-align:left;transition:all .15s;}
+.sidebar-btn:hover{background:var(--bg2);}
+.sidebar-btn.active{background:var(--sage-light);color:var(--sage-dark);font-weight:500;}
+.sidebar-btn .sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.main-content{flex:1;min-width:0;}
+@media(max-width:640px){
+  .app-layout{flex-direction:column;}
+  .sidebar{width:100%;padding-right:0;padding-bottom:.75rem;
+    display:flex;flex-wrap:wrap;gap:4px;border-bottom:.5px solid var(--border);margin-bottom:1rem;}
+  .sidebar-group{margin-bottom:4px;width:100%;}
+  .sidebar-group-label{display:none;}
+  .sidebar-btn{width:auto;padding:5px 10px;font-size:12px;border:.5px solid var(--border);background:var(--bg2);}
+  .sidebar-btn.active{background:var(--sage-light);border-color:var(--sage);}
+}
 </style>
 </head>
 <body>
@@ -355,15 +375,42 @@ body{background:#F7F4EF;font-family:'DM Sans',sans-serif;padding:1.5rem 1rem 4re
 </div>
 
 <div class="app" id="mainApp" style="display:none;">
-<div class="hero-banner">
-  <h1>Guide Hamza — Complet v3</h1>
-  <p style="display:flex;justify-content:space-between;align-items:center;">
-      <span>Cartes retournables · Exercices par matière · Régime alimentaire · Appréciation école · Suivi héros</span>
-      <button onclick="doLogout()" style="background:rgba(255,255,255,0.2);border:.5px solid rgba(255,255,255,0.4);color:#fff;border-radius:20px;padding:4px 12px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;" id="logoutBtn">Déconnexion</button>
-    </p>
+<div class="hero-banner" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+  <div>
+    <h1>🦁 Guide Hamza</h1>
+    <p style="margin-top:3px;">Chaque jour, un pas de plus vers la meilleure version de toi.</p>
+  </div>
+  <button onclick="doLogout()" style="background:rgba(255,255,255,0.2);border:.5px solid rgba(255,255,255,0.4);color:#fff;border-radius:20px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;">Déconnexion</button>
 </div>
-<div class="tabs">
-  <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);width:100%;padding:2px 0 4px;margin-top:4px;">Pour Hamza</div>
+<div class="app-layout">
+<nav class="sidebar">
+  <div class="sidebar-group">
+    <span class="sidebar-group-label">Pour Hamza</span>
+    <button class="sidebar-btn active" data-t="suivi" onclick="show('suivi')"><span class="sdot" style="background:#F59E0B;"></span>Suivi héros</button>
+    <button class="sidebar-btn" data-t="agenda" onclick="show('agenda')"><span class="sdot" style="background:var(--teal);"></span>Agenda</button>
+    <button class="sidebar-btn" data-t="devoirs" onclick="show('devoirs')"><span class="sdot" style="background:var(--sky);"></span>Exercices devoirs</button>
+    <button class="sidebar-btn" data-t="timer" onclick="show('timer')"><span class="sdot" style="background:var(--sage);"></span>Timer devoirs</button>
+  </div>
+  <div class="sidebar-group">
+    <span class="sidebar-group-label">Pour toi</span>
+    <button class="sidebar-btn" data-t="progression" onclick="show('progression')"><span class="sdot" style="background:#2E86C1;"></span>Progression</button>
+    <button class="sidebar-btn" data-t="alimentation" onclick="show('alimentation')"><span class="sdot" style="background:var(--green);"></span>Alimentation</button>
+  </div>
+  <div class="sidebar-group">
+    <span class="sidebar-group-label">Spécialistes</span>
+    <button class="sidebar-btn" data-t="neuro" onclick="show('neuro')"><span class="sdot" style="background:var(--sky);"></span>Neurologue</button>
+    <button class="sidebar-btn" data-t="psy" onclick="show('psy')"><span class="sdot" style="background:var(--lavender);"></span>Psychologue</button>
+    <button class="sidebar-btn" data-t="physio" onclick="show('physio')"><span class="sdot" style="background:var(--clay);"></span>Kinésiologue</button>
+    <button class="sidebar-btn" data-t="parent" onclick="show('parent')"><span class="sdot" style="background:var(--rose);"></span>Coach parentale</button>
+    <button class="sidebar-btn" data-t="dopa" onclick="show('dopa')"><span class="sdot" style="background:var(--amber);"></span>Dopamine</button>
+    <button class="sidebar-btn" data-t="social" onclick="show('social')"><span class="sdot" style="background:#C4848A;"></span>Compétences sociales</button>
+  </div>
+  <div class="sidebar-group">
+    <span class="sidebar-group-label">Équipement</span>
+    <button class="sidebar-btn" data-t="kit" onclick="show('kit')"><span class="sdot" style="background:#6B7280;"></span>Kit équipement</button>
+  </div>
+</nav>
+<div class="main-content">
   <button class="tab active" data-t="suivi" onclick="show('suivi')"><span class="dot"></span>Suivi héros</button>
   <button class="tab" data-t="agenda" onclick="show('agenda')"><span class="dot"></span>Agenda</button>
   <button class="tab" data-t="devoirs" onclick="show('devoirs')"><span class="dot"></span>Exercices devoirs</button>
@@ -1117,7 +1164,8 @@ body{background:#F7F4EF;font-family:'DM Sans',sans-serif;padding:1.5rem 1rem 4re
 </div>
 
 
-</div>
+</div><!-- main-content -->
+</div><!-- app-layout -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
 // ─── SUPABASE CONFIG ─────────────────────────────────────────
@@ -1259,7 +1307,7 @@ window.addEventListener('load', () => {
   }
 });
 
-function show(id){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab[data-t]').forEach(t=>t.classList.remove('active'));const panel=document.querySelector('.panel[data-t="'+id+'"]');const tab=document.querySelector('.tab[data-t="'+id+'"]');if(panel)panel.classList.add('active');if(tab)tab.classList.add('active');if(id==='progression'&&typeof pRenderWeek==='function')pRenderWeek();}
+function show(id){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.sidebar-btn').forEach(t=>t.classList.remove('active'));const panel=document.querySelector('.panel[data-t="'+id+'"]');const btn=document.querySelector('.sidebar-btn[data-t="'+id+'"]');if(panel)panel.classList.add('active');if(btn)btn.classList.add('active');if(id==='progression'&&typeof pRenderWeek==='function')pRenderWeek();}
 function showSubject(btn,id){document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.subject-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('sp-'+id).classList.add('active');}
 function kitCheck(cb){const item=cb.closest('.kit-item');if(item){item.style.opacity=cb.checked?'0.5':'1';const n=item.querySelector('.kit-name');if(n)n.style.textDecoration=cb.checked?'line-through':'none';}}
 const flipped=new Array(9).fill(false),done=new Array(9).fill(false),PTS=[10,10,10,15,20,10,10,15,10];
