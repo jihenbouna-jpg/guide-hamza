@@ -1150,6 +1150,7 @@ body{background:#F7F4EF;font-family:'DM Sans',sans-serif;padding:1.5rem 1rem 4re
 </div><!-- main-content -->
 </div><!-- app-layout -->
 </div><!-- app -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
 // ─── SUPABASE CONFIG ─────────────────────────────────────────
@@ -1158,18 +1159,15 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 let currentUser = null;
 let accessToken = null;
 
-// ─── AUTH (fetch-based, no SDK) ──────────────────────────────
-async function supaFetch(path, method='GET', body=null, auth=false) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + (auth && accessToken ? accessToken : SUPA_KEY)
-  };
-  const opts = { method, headers };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL + path, opts);
-  const data = await res.json();
-  return { data, error: res.ok ? null : data };
+// ─── AUTH (SDK-based) ────────────────────────────────────────
+let _supa = null;
+function getSupa() {
+  if (!_supa && window.supabase) {
+    _supa = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    });
+  }
+  return _supa;
 }
 
 async function doLogin() {
@@ -1177,9 +1175,11 @@ async function doLogin() {
   const pwd = document.getElementById('loginPwd').value;
   if (!email || !pwd) { showLoginMsg('Remplis les deux champs', '#E24B4A'); return; }
   showLoginMsg('Connexion...', '#F59E0B');
-  const { data, error } = await supaFetch('/auth/v1/token?grant_type=password', 'POST', { email, password: pwd });
+  const sb = getSupa();
+  if (!sb) { showLoginMsg('Erreur de chargement - recharge la page', '#E24B4A'); return; }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
   if (error) { showLoginMsg('Email ou mot de passe incorrect', '#E24B4A'); return; }
-  accessToken = data.access_token;
+  accessToken = data.session.access_token;
   currentUser = data.user;
   onLoginSuccess();
 }
@@ -1190,10 +1190,12 @@ async function doSignup() {
   if (!email) { showLoginMsg('Entre ton email', '#E24B4A'); return; }
   if (pwd.length < 6) { showLoginMsg('Mot de passe : 6 caractères minimum', '#E24B4A'); return; }
   showLoginMsg('Création du compte...', '#F59E0B');
-  const { data, error } = await supaFetch('/auth/v1/signup', 'POST', { email, password: pwd });
-  if (error) { showLoginMsg('Erreur : ' + (error.msg || error.message || 'Réessaie'), '#E24B4A'); return; }
-  if (data.access_token) {
-    accessToken = data.access_token;
+  const sb = getSupa();
+  if (!sb) { showLoginMsg('Erreur de chargement - recharge la page', '#E24B4A'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pwd });
+  if (error) { showLoginMsg('Erreur : ' + error.message, '#E24B4A'); return; }
+  if (data.session) {
+    accessToken = data.session.access_token;
     currentUser = data.user;
     onLoginSuccess();
   } else {
@@ -1204,12 +1206,14 @@ async function doSignup() {
 async function doReset() {
   const email = document.getElementById('loginEmail').value.trim();
   if (!email) { showLoginMsg('Entre ton email', '#E24B4A'); return; }
-  await supaFetch('/auth/v1/recover', 'POST', { email });
+  const sb = getSupa();
+  if (sb) await sb.auth.resetPasswordForEmail(email);
   showLoginMsg('Email de réinitialisation envoyé !', '#7B9E87');
 }
 
 async function doLogout() {
-  await supaFetch('/auth/v1/logout', 'POST', null, true);
+  const sb = getSupa();
+  if (sb) await sb.auth.signOut();
   currentUser = null; accessToken = null;
   localStorage.removeItem('supa_session');
   document.getElementById('mainApp').style.display = 'none';
@@ -1231,10 +1235,9 @@ function onLoginSuccess() {
 
 // ─── DB OPERATIONS (fetch-based) ─────────────────────────────
 async function dbSaveDay(key, data) {
-  // Always save locally first
   localStorage.setItem('day_' + key, JSON.stringify(data));
-  if (!accessToken || !currentUser) return;
-  // Clean data for Supabase (no undefined values)
+  const sb = getSupa();
+  if (!sb || !currentUser) return;
   const row = {
     user_id: currentUser.id,
     date_key: key,
@@ -1249,22 +1252,14 @@ async function dbSaveDay(key, data) {
     updated_at: new Date().toISOString()
   };
   try {
-    await fetch(SUPA_URL + '/rest/v1/hamza_daily', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPA_KEY,
-        'Authorization': 'Bearer ' + accessToken,
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
-      },
-      body: JSON.stringify(row)
-    });
+    await sb.from('hamza_daily').upsert(row, { onConflict: 'user_id,date_key' });
   } catch(e) { console.log('Save day error:', e); }
 }
 
 async function dbSaveWeek(key, data) {
   localStorage.setItem('week_' + key, JSON.stringify(data));
-  if (!accessToken || !currentUser) return;
+  const sb = getSupa();
+  if (!sb || !currentUser) return;
   const row = {
     user_id: currentUser.id,
     week_key: key,
@@ -1273,21 +1268,11 @@ async function dbSaveWeek(key, data) {
     updated_at: new Date().toISOString()
   };
   try {
-    await fetch(SUPA_URL + '/rest/v1/hamza_weekly', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPA_KEY,
-        'Authorization': 'Bearer ' + accessToken,
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
-      },
-      body: JSON.stringify(row)
-    });
+    await sb.from('hamza_weekly').upsert(row, { onConflict: 'user_id,week_key' });
   } catch(e) { console.log('Save week error:', e); }
 }
 
 async function dbLoadAllDays() {
-  // First load from localStorage as immediate fallback
   const local = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -1295,34 +1280,22 @@ async function dbLoadAllDays() {
       try { local[k.replace('day_', '')] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
     }
   }
-  if (!accessToken || !currentUser) return local;
+  const sb = getSupa();
+  if (!sb || !currentUser) return local;
   try {
-    const res = await fetch(SUPA_URL + '/rest/v1/hamza_daily?user_id=eq.' + currentUser.id + '&select=*&order=date_key.desc', {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + accessToken }
-    });
-    const rows = await res.json();
-    if (!Array.isArray(rows)) return local;
+    const { data: rows, error } = await sb.from('hamza_daily').select('*').eq('user_id', currentUser.id).order('date_key', { ascending: false });
+    if (error || !rows) return local;
     const result = { ...local };
     rows.forEach(row => {
-      // Supabase data takes priority over local (more recent/synced)
       result[row.date_key] = {
-        score: row.score,
-        hero: row.hero,
-        school: row.school,
-        mood: row.mood,
-        subjects: row.subjects || {},
-        done: row.done || [],
-        force_jour: row.force_jour,
-        school_note: row.school_note
+        score: row.score, hero: row.hero, school: row.school, mood: row.mood,
+        subjects: row.subjects || {}, done: row.done || [],
+        force_jour: row.force_jour, school_note: row.school_note
       };
-      // Also update localStorage with Supabase data
       localStorage.setItem('day_' + row.date_key, JSON.stringify(result[row.date_key]));
     });
     return result;
-  } catch(e) {
-    console.log('Load error, using local:', e);
-    return local;
-  }
+  } catch(e) { return local; }
 }
 
 async function loadAllData() {
@@ -1357,31 +1330,45 @@ function renderWeek() {
 }
 
 // ─── RESTORE SESSION ON LOAD ──────────────────────────────────
-window.addEventListener('load', () => {
-  const saved = localStorage.getItem('supa_session');
-  if (saved) {
-    try {
-      const session = JSON.parse(saved);
+window.addEventListener('load', async () => {
+  // Load local data instantly for immediate display
+  const local = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('day_')) {
+      try { local[k.replace('day_', '')] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+    }
+  }
+  Object.assign(DAY_STORAGE, local);
+
+  // Wait for SDK to load
+  let tries = 0;
+  while (!window.supabase && tries < 20) {
+    await new Promise(r => setTimeout(r, 100));
+    tries++;
+  }
+
+  const sb = getSupa();
+  if (!sb) return;
+
+  // Check existing session
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    accessToken = session.access_token;
+    currentUser = session.user;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    updateStreak();
+    loadAllData(); // sync with Supabase in background
+  }
+
+  // Listen for auth changes
+  sb.auth.onAuthStateChange((event, session) => {
+    if (session && !currentUser) {
       accessToken = session.access_token;
       currentUser = session.user;
-      // Show app immediately with local data
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('mainApp').style.display = 'block';
-      // Load local data instantly
-      const local = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('day_')) {
-          try { local[k.replace('day_', '')] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
-        }
-      }
-      Object.assign(DAY_STORAGE, local);
-      updateStreak();
-      // Then sync with Supabase in background
-      loadAllData();
-      return;
-    } catch(e) {}
-  }
+    }
+  });
 });
 
 function show(id){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.sidebar-btn').forEach(t=>t.classList.remove('active'));const panel=document.querySelector('.panel[data-t="'+id+'"]');const btn=document.querySelector('.sidebar-btn[data-t="'+id+'"]');if(panel)panel.classList.add('active');if(btn)btn.classList.add('active');if(id==='progression'&&typeof pRenderWeek==='function')pRenderWeek();}
