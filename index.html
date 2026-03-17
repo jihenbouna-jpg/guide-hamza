@@ -1476,8 +1476,10 @@ function updateStreak(){const row=document.getElementById('streakRow');row.inner
 function changeDay(delta){currentOffset+=delta;document.getElementById('dateLabel').textContent=getDateLabel(currentOffset);document.getElementById('dateSub').textContent=getDateSub(currentOffset);const key=getDateKey(currentOffset),data=DAY_STORAGE[key];resetDay();if(data){data.done.forEach((d,i)=>{if(d){done[i]=true;document.getElementById('fc'+i).classList.add('done');document.getElementById('fb'+i).classList.add('checked');}});if(data.school)rateSchool(data.school);if(data.mood)rateMood(data.mood);if(data.subjects)loadSubjStars(data.subjects);
     const sn=document.getElementById('schoolNote');if(sn)sn.value=data.school_note||'';
     const fn=document.getElementById('forceNote');if(fn)fn.value=data.force_jour||'';updateScore();}updateStreak();}
-document.getElementById('dateSub').textContent=getDateSub(0);
-// Debug: confirm date key
+// Always start on today
+currentOffset = 0;
+document.getElementById('dateLabel').textContent = "Aujourd'hui";
+document.getElementById('dateSub').textContent = getDateSub(0);
 console.log('Today key:', getDateKey(0), '| Local date:', new Date().toLocaleDateString('fr-CA'));
 updateStreak();updateScore();
 let tIntvl=null,tTotal=900,tRemain=900,tRunning=false;
