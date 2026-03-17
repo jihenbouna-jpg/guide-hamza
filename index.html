@@ -1251,7 +1251,10 @@ async function dbSaveDay(key, data) {
     school_note: data.school_note || ''
   };
   try {
-    const { error } = await sb.from('hamza_daily').upsert(row, { onConflict: 'user_id,date_key' });
+    const { error } = await sb.from('hamza_daily').upsert(row, { 
+      onConflict: 'user_id,date_key',
+      ignoreDuplicates: false
+    });
     if (error) console.log('Save day error:', error.message);
     else console.log('Saved day', key, 'score', row.score);
   } catch(e) { console.log('Save day exception:', e); }
