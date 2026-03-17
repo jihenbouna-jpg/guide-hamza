@@ -1239,8 +1239,8 @@ async function dbSaveDay(key, data) {
   const sb = getSupa();
   if (!sb || !currentUser) return;
   const row = {
-    user_id: currentUser.id,
-    date_key: key,
+    user_id: currentUser.id,  // uuid — Supabase Auth ID
+    date_key: key,             // 'YYYY-MM-DD' — Postgres date accepts this
     score: data.score || 0,
     school: data.school || 0,
     mood: data.mood || 0,
@@ -1248,12 +1248,13 @@ async function dbSaveDay(key, data) {
     done: data.done || [],
     hero: data.hero || '',
     force_jour: data.force_jour || '',
-    school_note: data.school_note || '',
-    updated_at: new Date().toISOString()
+    school_note: data.school_note || ''
   };
   try {
-    await sb.from('hamza_daily').upsert(row, { onConflict: 'user_id,date_key' });
-  } catch(e) { console.log('Save day error:', e); }
+    const { error } = await sb.from('hamza_daily').upsert(row, { onConflict: 'user_id,date_key' });
+    if (error) console.log('Save day error:', error.message);
+    else console.log('Saved day', key, 'score', row.score);
+  } catch(e) { console.log('Save day exception:', e); }
 }
 
 async function dbSaveWeek(key, data) {
@@ -1283,7 +1284,7 @@ async function dbLoadAllDays() {
   const sb = getSupa();
   if (!sb || !currentUser) return local;
   try {
-    const { data: rows, error } = await sb.from('hamza_daily').select('*').eq('user_id', currentUser.id).order('date_key', { ascending: false });
+    const { data: rows, error } = await sb.from('hamza_daily').select('*').eq('user_id', currentUser.id).order('date_key', { ascending: false }); if (error) console.log('Load error:', error.message);
     if (error || !rows) return local;
     const result = { ...local };
     rows.forEach(row => {
